@@ -13,8 +13,21 @@ app.use(express.static("public"))
 
 // router
 import userRouter from './routes/user.route.js'
+import { upload } from "./middlewares/multer.middleware.js";
 
-app.use("/api/v1/users" ,userRouter)
+app.use("/api/v1/users" ,
+upload.fields([                       // here multer is used as a middleware
+    {
+        name:"avatar",
+        maxCount: 1,
+    },
+    {
+        name:"coverImage",
+        maxCount:1,
+    }
+]),
+userRouter
+)
 
 
 
