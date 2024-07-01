@@ -11,15 +11,6 @@ const userWatchHistory = new mongoose.Schema({
 })
 
 const userSchema = new mongoose.Schema({
-    id:{
-        type:String,
-        required:true,
-        unique:true,
-        trim:true,
-        index:true,
-        lowercase:true,
-
-    },
     watchHistory:[userWatchHistory],
     username:{
         type:String,
@@ -81,7 +72,7 @@ userSchema.methods.isPasswordCorrect = async function(password){  // coustom hoo
 userSchema.methods.generateAccessToken = function(){
     return Jwt.sign(
         {
-            id : this.id,
+            _id : this._id,
             username: this.username,
             fullName: this.fullName,
             email: this.email,
@@ -95,7 +86,7 @@ userSchema.methods.generateAccessToken = function(){
 userSchema.methods.generateRefreshToken = function(){
     return Jwt.sign(
         {
-            id : this.id,
+            _id : this._id,
         },
         process.env.REFRESH_TOKEN_SECRET,
         {

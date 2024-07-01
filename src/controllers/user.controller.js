@@ -3,6 +3,7 @@ import {ApiError} from '../utils/ApiError.js'
 import { User } from "../models/user.model.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { stringify } from 'flatted';  // Import flatted
 
 const registerUser = asyncHandler(async (req,res,next)=>{
     // res.status(200).json({
@@ -35,23 +36,29 @@ const registerUser = asyncHandler(async (req,res,next)=>{
        throw new ApiError(400,"all fields are required") 
     }
 
-    const existedUser = User.findOne({      // matlab user exist before
+    const existedUser = await User.findOne({      // matlab user exist before
         $or: ({username},{email})
     })
     if (existedUser) {
         throw new ApiError(409,"user already exist")
     }
-
+     
     const avatarlocalPath =req.files?.avatar[0]?.path;
-    const coverImagelocalPath =req.files?.coverImage[0]?.path;
+    // const coverImagelocalPath =req.files?.coverImage[0]?.path;
+
+    let coverImagelocalPath;
+    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.lenght >0){
+        coverImagelocalPath= req.files.coverImage[0].path;
+    }
 
     if(!avatarlocalPath){
-        throw new ApiError(400,"avatar file is required")
+        throw new ApiError(400,"avatar file is required lc")
     }
 
     // now we have the local file path so we can upload them on cloudinary
-    const avatar =uploadOnCloudinary(avatarlocalPath)
-    const coverImage = uploadOnCloudinary(coverImagelocalPath)
+    const avatar =await uploadOnCloudinary(avatarlocalPath)
+    const coverImage = await uploadOnCloudinary(coverImagelocalPath)
+
 
     if(!avatar){                              // we are only checking for avatar field as hmne avatar field ko hi required kiya tha user.model me 
         throw new ApiError(400,"avatar file is required")
@@ -59,7 +66,7 @@ const registerUser = asyncHandler(async (req,res,next)=>{
 
 
     // creating a user object and uploading on db
-    const user = User.create({
+    const user =await User.create({
         fullName,
         avatar: avatar.url,
         coverImage: coverImage.url || "",
@@ -76,9 +83,12 @@ const registerUser = asyncHandler(async (req,res,next)=>{
         throw new ApiError(500,"something went wrong while registering the user")
     }
 
+    // Remove circular references (if any)
+    const safeUser = JSON.parse(stringify(createdUser));
+
     // now return
     return res.status(201).json(
-        new ApiResponse(200,createdUser,"user created successfully")
+        new ApiResponse(200,safeUser,"user created successfully")
     )
 })
 export {registerUser}
