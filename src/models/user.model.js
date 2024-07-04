@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import Jwt from "jsonwebtoken";
-import bcrypt from 'bcryptjs'
+import jwt from "jsonwebtoken";
+import bcrypt from 'bcrypt'
 
 
 const userWatchHistory = new mongoose.Schema({
@@ -11,7 +11,9 @@ const userWatchHistory = new mongoose.Schema({
 })
 
 const userSchema = new mongoose.Schema({
+
     watchHistory:[userWatchHistory],
+
     username:{
         type:String,
         required:true,
@@ -52,25 +54,24 @@ const userSchema = new mongoose.Schema({
 
 /*pre-hooks (or middleware) are functions that run before certain operations are executed. These hooks are useful for performing actions such as validation, sanitization, logging, or modifying documents before saving them to the database*/
 
-userSchema.pre("save",async function (next){       // arrow function me this. ka refrence nhi hota
-    if(this.isModified("password"))
-    {
-    this.password = bcrypt.hash(this.password ,10)
-    next();
-    }
-    else{
-        return next();
-    }
-})
+userSchema.pre("save", async function (next) {
+    if (! this.isModified("password")) return next();
+
+    this.password =await bcrypt.hash(this.password , 10)
+    next()
+});
 
 
 // .methods se hum coustom hook/methods generate kar sakte hai
-userSchema.methods.isPasswordCorrect = async function(password){  // coustom hook/method
-   return await bcrypt.compare(password,this.password)
-}
+userSchema.methods.isPasswordCorrect = async function (password) {
+    // console.log(password);
+    // console.log(this.password);
+    // console.log(bcrypt.compare(password, this.password))
+    return await bcrypt.compare(password, this.password);
+};
 
 userSchema.methods.generateAccessToken = function(){
-    return Jwt.sign(
+    return jwt.sign(
         {
             _id : this._id,
             username: this.username,
@@ -84,7 +85,7 @@ userSchema.methods.generateAccessToken = function(){
     )
 }
 userSchema.methods.generateRefreshToken = function(){
-    return Jwt.sign(
+    return jwt.sign(
         {
             _id : this._id,
         },

@@ -5,7 +5,7 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { stringify } from 'flatted';  // Import flatted
 
-const registerUser = asyncHandler(async (req,res,next)=>{
+const registerUser = asyncHandler(async (req,res)=>{
     // res.status(200).json({
     //     message:"okk",
     // })
@@ -37,7 +37,7 @@ const registerUser = asyncHandler(async (req,res,next)=>{
     }
 
     const existedUser = await User.findOne({      // matlab user exist before
-        $or: ({username},{email})
+        $or: [{username},{email}]
     })
     if (existedUser) {
         throw new ApiError(409,"user already exist")
@@ -69,7 +69,7 @@ const registerUser = asyncHandler(async (req,res,next)=>{
     const user =await User.create({
         fullName,
         avatar: avatar.url,
-        coverImage: coverImage.url || "",
+        coverImage: coverImage ? coverImage.url : undefined,
         email,
         password,
         username,
@@ -91,4 +91,109 @@ const registerUser = asyncHandler(async (req,res,next)=>{
         new ApiResponse(200,safeUser,"user created successfully")
     )
 })
-export {registerUser}
+
+
+// 
+const generateAccessandRefreshToken = async(userId)=>{
+    try {
+        const user =await User.findById(userId);
+        // console.log(user);
+        const accessToken = user.generateAccessToken();      // from user.model.js
+        // console.log(accessToken);
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken =refreshToken;       // refreshToken (from user.model)
+        await user.save({validateBeforeSave: false});
+
+        return {accessToken,refreshToken}
+
+    } catch (error) {
+        throw new ApiError(500,"error generating access and refresh token!")
+    }
+}
+
+const loginUser = asyncHandler(async (req,res)=>{
+
+    // steps -->
+    // take input from req.body
+    // check for user
+    // check for correct password
+    // access and refresh token
+    // send cookies
+
+    const {username,email,password} = req.body;
+    // console.log(email);
+    // console.log(username);
+    console.log(password);
+
+    if (!(username || email)) {
+        throw new ApiError(400, "username or email is required")
+    }
+
+    // check if user exist
+    const user =await User.findOne({
+        $or : [{username}, {email}]  
+    })
+    if(!user){
+        throw new ApiError(400,"user not found!")
+    }
+
+    // now check for correct password
+    const validPassword = await  user.isPasswordCorrect(password);
+    console.log('Valid Password:', validPassword);
+    if(!validPassword){
+        throw new ApiError(401,"password is incorrect!!");
+    }
+
+    // access and refresh token
+    const {accessToken,refreshToken}=await generateAccessandRefreshToken(user._id);
+
+    const loggedInUser = User.findById(user._id).select("-password -refreshToken")
+
+    const safeUser = JSON.parse(stringify(loggedInUser));     // circular reference remove karne k liye
+
+
+    const options={
+        httpOnly: true,     // that means only server can modify it and frontend can't
+        secure: true,
+    }
+
+    return res
+    .status(200)
+    .cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",refreshToken,options)
+    .json(
+         new ApiResponse(
+            200,
+            {
+                user:safeUser,accessToken,refreshToken
+            },
+            "user logged-in successfully"
+        )
+    )
+
+})
+
+const logOutUser =asyncHandler(async(req,res)=>{
+    User.findByIdAndUpdate(
+        req.body._id,
+        {
+            $set:{
+                refreshToken: undefined
+            }
+        },
+    )
+    const options={
+        httpOnly: true,
+        secure: true,
+    }
+
+    return res.
+    status(200)
+    .clearCookie("accessToken",options)
+    .clearCookie("refreshToken",options)
+    .json(
+        new ApiResponse(200,{},"logged out successfully")
+    )
+})
+export {registerUser,loginUser,logOutUser}
