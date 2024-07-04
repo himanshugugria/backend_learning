@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { stringify } from 'flatted';  // Import flatted
+import jwt from 'jsonwebtoken'
 
 const registerUser = asyncHandler(async (req,res)=>{
     // res.status(200).json({
@@ -196,4 +197,47 @@ const logOutUser =asyncHandler(async(req,res)=>{
         new ApiResponse(200,{},"logged out successfully")
     )
 })
-export {registerUser,loginUser,logOutUser}
+
+
+// now writing the function for refreshing the access token
+// ab ye hoga wtih the help of refresh token as jo user hai(frontend) vo backend ko ek refresh token
+// bejega jo agar refresh token (database wala) ussse match hua toh we can give the user another access token insted ki user baar baar login kare
+
+const refershAccessToken = asyncHandler(async (req,res)=>{
+    // now agar user(frontend) ko refresh token chahiye toh vo cookies me se access kar sakta hai
+    const incomingRefreshToken = req.cookie.refreshToken || req.body.refreshToken  // .body se bhi access kar sakte hai if mobile user hua toh
+    if(!incomingRefreshToken){
+        throw new ApiError(401,"unautorized request")
+    }
+    const decodedToken =jwt.verify(
+        incomingRefreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+        )
+    const user = await User.findById(decodedToken?._id)
+    if(!user){
+        throw new ApiError(401,"invalid refresh token")
+    }
+
+    if(incomingRefreshToken !== user.refreshToken){     // comparing the incoming refreshtoken (user se) to the one saved in db
+        throw new ApiError(401,"refresh token not matched!")
+    }
+
+    const {accessToken,newrefreshToken}=generateAccessandRefreshToken(user?._id)
+    
+    const options={
+        httpOnly: true,
+        secure: true
+    }
+    return res
+    .status(200)
+    .cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",newrefreshToken,options)
+    .json(
+        new ApiResponse(
+            200,
+            {accessToken,refreshToken:newrefreshToken},
+            "access token refreshed"
+        )
+    )
+})
+export {registerUser,loginUser,logOutUser,refershAccessToken}
